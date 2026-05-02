@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sentence Stars ✨</title>
+
+<style>
+:root {
+  --blue:#3a86ff;
+  --green:#06d6a0;
+  --red:#ff6b6b;
+  --yellow:#ffbe0b;
+  --purple:#8338ec;
+  --bg:#fff9f0;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+
+body{
+  font-family:Arial, sans-serif;
+  background:var(--bg);
+  padding:16px;
+}
+
+h1{
+  text-align:center;
+  margin-bottom:10px;
+}
+
+.card{
+  background:white;
+  border-radius:20px;
+  padding:20px;
+  box-shadow:0 8px 20px rgba(0,0,0,0.1);
+}
+
+.word{
+  display:inline-block;
+  padding:8px 14px;
+  margin:6px;
+  background:white;
+  border:2px solid var(--blue);
+  border-radius:10px;
+  cursor:pointer;
+  font-weight:bold;
+}
+
+.word.used{
+  opacity:0.3;
+}
+
+.slot{
+  min-height:40px;
+  margin-bottom:12px;
+}
+
+.btn{
+  padding:12px;
+  border:none;
+  border-radius:12px;
+  margin-top:10px;
+  width:100%;
+  font-weight:bold;
+  cursor:pointer;
+}
+
+.submit{background:var(--yellow)}
+.next{background:var(--blue);color:white}
+
+.feedback{
+  margin-top:10px;
+  font-weight:bold;
+  text-align:center;
+}
+</style>
+</head>
+
+<body>
+
+<h1>⭐ Sentence Stars</h1>
+
+<div class="card">
+  <div id="game"></div>
+  <button class="btn submit" onclick="check()">Check</button>
+  <div class="feedback" id="feedback"></div>
+  <button class="btn next" onclick="loadQuestion()">Next</button>
+</div>
+
+<script>
+let currentQ=null;
+let placed=[];
+let streak=0;
+let stars=0;
+
+function speak(text){
+  const u=new SpeechSynthesisUtterance(text);
+  u.rate=0.9;
+  speechSynthesis.speak(u);
+}
+
+function applyTheme(theme){
+  const themes={
+    space:['#3a86ff','#06d6a0'],
+    jungle:['#06d6a0','#ffbe0b'],
+    fantasy:['#8338ec','#ff70a6']
+  };
+  const t=themes[theme]||themes.space;
+  document.documentElement.style.setProperty('--blue',t[0]);
+  document.documentElement.style.setProperty('--green',t[1]);
+}
+
+async function loadQuestion(){
+  document.getElementById("feedback").textContent="";
+  placed=[];
+
+  const res=await fetch("/api/question",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      model:"claude-sonnet-4-20250514",
+      max_tokens:500,
+      messages:[{
+        role:"user",
+        content:`Create a fun sentence scramble for kids.
+
+Return JSON:
+{
+"sentence":"The sleepy dragon snored under the moon",
+"words":["dragon","The","moon","snored","sleepy","the","under"],
+"theme":"fantasy"
+}`
+      }]
+    })
+  });
+
+  const data=await res.json();
+  const text=data.content?.[0]?.text||"";
+  currentQ=JSON.parse(text.replace(/```json|```/g,""));
+
+  applyTheme(currentQ.theme);
+
+  render();
+}
+
+function render(){
+  const game=document.getElementById("game");
+  game.innerHTML="";
+
+  const slot=document.createElement("div");
+  slot.className="slot";
+  slot.id="slot";
+  game.appendChild(slot);
+
+  currentQ.words.forEach((w,i)=>{
+    const el=document.createElement("div");
+    el.className="word";
+    el.textContent=w;
+    el.onclick=()=>{
+      el.classList.add("used");
+      placed.push(w);
+      updateSlot();
+    };
+    game.appendChild(el);
+  });
+}
+
+function updateSlot(){
+  document.getElementById("slot").textContent=placed.join(" ");
+}
+
+function check(){
+  const user=placed.join(" ").toLowerCase();
+  const correct=currentQ.sentence.toLowerCase();
+
+  if(user===correct){
+    streak++;
+    stars++;
+
+    if(streak>=3) stars++;
+
+    speak(currentQ.sentence);
+
+    document.getElementById("feedback").textContent=
+      "🔥 Streak "+streak+" — Correct! ⭐";
+
+    new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg").play();
+
+  }else{
+    streak=0;
+    document.getElementById("feedback").textContent=
+      "❌ Try again! → "+currentQ.sentence;
+
+    new Audio("https://actions.google.com/sounds/v1/cartoon/boing.ogg").play();
+  }
+}
+
+loadQuestion();
+</script>
+
+</body>
+</html>
